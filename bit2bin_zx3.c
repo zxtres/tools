@@ -22,7 +22,7 @@
 
 #define PROGRAM "Bit2Bin_zx3"
 #define DESCRIPTION "strip .bit header and split binary to 1152Kb files"
-#define VERSION "0.09 (2023-10-01)"
+#define VERSION "0.10 (2023-10-05)"
 #define COPYRIGHT "Copyright (C) 2019-2023 Antonio Villena"
 #define LICENSE \
 "This program is free software: you can redistribute it and/or modify\n" \
@@ -145,7 +145,7 @@ int main(int argc, char *argv[]) {
   if (len == 0xffff)
   {
     printf("input is not a .bit file, will be processed as .bin\n");
-    i = length;
+    length = i;
   }
   else
   {
@@ -165,20 +165,37 @@ int main(int argc, char *argv[]) {
     printf("Invalid file length\n"),
     exit(-1);
 
-  int number=0;
-  while(!feof(fi))
+  printf("input binary has: %d blocks of 16Kb, and %d bytes\n", length>>14, length&0x3fff);
+
+  const char *path = argc>2 ? argv[2] : argv[1];
+  const char *name = get_filename_from_path(path);
+  const char *extens = get_extens_from_path(path);
+  const char *newextens = argc>2 && *extens ? extens : ".zx3";
+  char outname[260];
+
+  if(1) // write full bin aligned to 16Kb
   {
-    char outname[260];
-    const char *path = argc>2 ? argv[2] : argv[1];
-    const char *name = get_filename_from_path(path);
-    const char *extens = get_extens_from_path(path);
-    const char *newextens = argc>2 && *extens ? extens : ".zx3";
-    sprintf(outname, "%.*s%.*s_%02d%s", name-path, path, extens-name, name, 1+number++, newextens);
-    printf("writing: %s\n", outname);
+    int ipos = ftell(fi);
+    sprintf(outname, "%.*s%.*s_[full]%s", name-path, path, extens-name, name, newextens);
+    printf("writing full: %s\n", outname);
+    write_split(fi, outname, (length+0x3fff)&~0x3fff);
+    fseek(fi, ipos, SEEK_SET);
+    if (ipos != ftell(fi))
+        printf("fseek error\n"),
+        exit(-1);
+  }
+
+
+  int number=0;
+  while(!feof(fi)) // write splits aligned to 1152Kb
+  {
+    sprintf(outname, "%.*s%.*s_[split_%02d]%s", name-path, path, extens-name, name, 1+number++, newextens);
+    printf("writing split: %s\n", outname);
     write_split(fi, outname, SPLIT_SIZE);
   }
 
-  printf("%d file(s) successfully created\n", number);
+  //printf("%d file(s) successfully created\n", number);
+  fclose(fi);
 
 #if 0
   fo= fopen(argv[2], "wb+");
